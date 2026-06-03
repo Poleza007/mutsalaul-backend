@@ -7,9 +7,7 @@ API работает на http://localhost:5000
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json, os, re, datetime
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 
 app = Flask(__name__)
 CORS(app)
@@ -18,9 +16,9 @@ BASE       = os.path.dirname(__file__)
 EMAILS_FILE = os.path.join(BASE, "email_subscribers.json")
 LOG_FILE    = os.path.join(BASE, "email_log.json")
 
-ADMIN_PASS = "admin2025"
-GMAIL_USER = "kamiltapaev@gmail.com"
-GMAIL_PASS = "yjjfgcqwptbxujiw"
+ADMIN_PASS  = "admin2025"
+RESEND_KEY  = "re_Lr5atSdK_3RxJaUxtndpNPfyrbeJh3dmi"
+resend.api_key = RESEND_KEY
 
 
 def load_json(path):
@@ -88,54 +86,37 @@ def send_all():
     ok        = 0
     fail      = 0
 
-    server = None
-    for attempt in range(3):
+    for email in emails:
         try:
-            server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
-            server.starttls()
-            server.login(GMAIL_USER, GMAIL_PASS)
-            break
-        except Exception:
-            server = None
-            import time; time.sleep(2)
-
-    if server is None:
-        fail += len(emails)
-        log.append({"time": timestamp, "to": "все",
-                    "message": message, "status": "ошибка: нет подключения к почтовому серверу"})
-    else:
-        for email in emails:
-            try:
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = "Оповещение — АМО «Село Муцалаул»"
-                msg["From"]    = f"АМО «Село Муцалаул» <{GMAIL_USER}>"
-                msg["To"]      = email
-                html = f"""
-                <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
-                  <div style="background:#1a3a6b;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
-                    <b style="font-size:1.1rem;">АМО «Село Муцалаул»</b><br>
-                    <span style="opacity:.8;font-size:.85rem;">Официальное оповещение</span>
-                  </div>
-                  <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;">
-                    <p style="font-size:1rem;color:#111;">{message}</p>
-                    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
-                    <p style="font-size:.8rem;color:#6b7280;">
-                      Хасавюртовский район, с. Муцалаул<br>
-                      Пн–Пт: 9:00–18:00 · momutsalaul@mail.ru
-                    </p>
-                  </div>
-                </div>"""
-                msg.attach(MIMEText(message, "plain", "utf-8"))
-                msg.attach(MIMEText(html, "html", "utf-8"))
-                server.sendmail(GMAIL_USER, email, msg.as_string())
-                ok += 1
-                log.append({"time": timestamp, "to": email,
-                            "message": message, "status": "отправлено"})
-            except Exception as e:
-                fail += 1
-                log.append({"time": timestamp, "to": email,
-                            "message": message, "status": f"ошибка: {e}"})
-        server.quit()
+            html = f"""
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
+              <div style="background:#1a3a6b;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
+                <b style="font-size:1.1rem;">АМО «Село Муцалаул»</b><br>
+                <span style="opacity:.8;font-size:.85rem;">Официальное оповещение</span>
+              </div>
+              <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;">
+                <p style="font-size:1rem;color:#111;">{message}</p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
+                <p style="font-size:.8rem;color:#6b7280;">
+                  Хасавюртовский район, с. Муцалаул<br>
+                  Пн–Пт: 9:00–18:00 · momutsalaul@mail.ru
+                </p>
+              </div>
+            </div>"""
+            resend.Emails.send({
+                "from":    "АМО Муцалаул <onboarding@resend.dev>",
+                "to":      [email],
+                "subject": "Оповещение — АМО «Село Муцалаул»",
+                "html":    html,
+                "text":    message
+            })
+            ok += 1
+            log.append({"time": timestamp, "to": email,
+                        "message": message, "status": "отправлено"})
+        except Exception as e:
+            fail += 1
+            log.append({"time": timestamp, "to": email,
+                        "message": message, "status": f"ошибка: {e}"})
 
     save_json(LOG_FILE, log)
     return jsonify({"status": "ok", "email_sent": ok, "email_fail": fail})
