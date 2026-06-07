@@ -85,7 +85,9 @@ def subscribe_email():
     save_json(PENDING_FILE, pending)
 
     # Отправляем письмо с подтверждением
-    confirm_url = f"{BACKEND_URL}/confirm?token={token}"
+    # host_url берём из запроса — ссылка ведёт на тот же сервер (localhost или Render)
+    base = request.host_url.rstrip('/')
+    confirm_url = f"{base}/confirm?token={token}"
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
       <div style="background:#1a3a6b;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;">
